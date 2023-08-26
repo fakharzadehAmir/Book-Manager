@@ -88,7 +88,37 @@ func (a *Auth) GenerateToken(cred Credentials) (Token, error) {
 }
 
 func (a *Auth) GetAccountByToken(token string) (*string, error) {
-	return nil, nil
+	//	Handle empty token
+	if token == "" {
+		return nil, errors.New("access denied: the token is empty")
+	}
+
+	//	Validate JWT token
+	claim, err := a.checkToken(token)
+	if err != nil {
+		return nil, errors.New("access denied: the access token is not valid")
+	}
+	return &claim.Username, nil
+}
+
+func (a *Auth) checkToken(tokenStr string) (*claims, error) {
+	c := &claims{}
+	tkn, err := jwt.ParseWithClaims(tokenStr, c, func(token *jwt.Token) (interface{}, error) {
+		return a.secretKey, nil
+	})
+	if err != nil {
+		if errors.Is(err, jwt.ErrSignatureInvalid) {
+			return nil, errors.New("invalid token")
+		}
+		a.logger.WithError(err).Warn("can not validate the token of the user")
+		return nil, errors.New("bad error in validating user token")
+	}
+
+	if !tkn.Valid {
+		return nil, errors.New("unauthorized")
+	}
+
+	return c, nil
 }
 
 func generateRandomKey() ([]byte, error) {
