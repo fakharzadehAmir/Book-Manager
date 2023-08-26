@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bookman/authenticate"
 	"bookman/db"
 	"encoding/json"
 	"io"
@@ -27,7 +28,7 @@ func (bm *BookManagerServer) HandleLogin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Parse the requeste body for login user
+	// Parse the request body for login user
 	reqData, err := io.ReadAll(r.Body)
 	if err != nil {
 		bm.Logger.Warn("can not read the body of the request")
@@ -42,6 +43,24 @@ func (bm *BookManagerServer) HandleLogin(w http.ResponseWriter, r *http.Request)
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+
+	// Use authenticate package to validate the credentials
+	token, err := bm.Authenticate.Login(authenticate.Credentials{
+		Username: lr.Username,
+		Password: lr.Password,
+	})
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte("can not login"))
+		return
+	}
+
+	response := map[string]interface{}{
+		"access_token": token.TokenString,
+	}
+	resBody, _ := json.Marshal(response)
+	w.WriteHeader(http.StatusOK)
+	w.Write(resBody)
 }
 
 func (bm *BookManagerServer) HandleSignUp(w http.ResponseWriter, r *http.Request) {

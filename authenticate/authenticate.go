@@ -4,6 +4,8 @@ import (
 	"bookman/db"
 	"crypto/rand"
 	"errors"
+	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -17,7 +19,7 @@ type Auth struct {
 }
 
 func NewAuth(db *db.GormDB, logger *logrus.Logger, jwtExpirationDuration time.Duration) (*Auth, error) {
-	secretKey, err := generateRnadomKey()
+	secretKey, err := generateRandomKey()
 	if err != nil {
 		return nil, err
 	}
@@ -43,8 +45,42 @@ type Token struct {
 	TokenString string
 }
 
-func (a *Auth) Login(cred Credentials) (Token, error) {
-	return Token{}, nil
+type claims struct {
+	jwt.MapClaims
+	Username string `json:"username"`
+}
+
+func (a *Auth) Login(cred Credentials) (*Token, error) {
+
+	// Check existence of user
+	account, err := a.db.GetUserByUsername(cred.Username)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check password
+	err = bcrypt.CompareHashAndPassword([]byte(account.Password), []byte(cred.Password))
+	if err != nil {
+		return nil, errors.New("the password is not correct")
+	}
+
+	//	Create JWT token
+	expirationTime := time.Now().Add(a.jwtExpirationDuration)
+	tokenJWT := jwt.NewWithClaims(jwt.SigningMethodHS256, &claims{
+		MapClaims: jwt.MapClaims{
+			"expired": expirationTime.Unix(),
+		},
+		Username: cred.Username,
+	})
+
+	tokenString, err := tokenJWT.SignedString(a.secretKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Token{
+		TokenString: tokenString,
+	}, nil
 }
 
 func (a *Auth) GenerateToken(cred Credentials) (Token, error) {
@@ -55,7 +91,7 @@ func (a *Auth) GetAccountByToken(token string) (*string, error) {
 	return nil, nil
 }
 
-func generateRnadomKey() ([]byte, error) {
+func generateRandomKey() ([]byte, error) {
 	jwtKey := make([]byte, 32)
 	if _, err := rand.Read(jwtKey); err != nil {
 		return nil, err
