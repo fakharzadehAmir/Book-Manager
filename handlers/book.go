@@ -14,7 +14,7 @@ type authorInBook struct {
 	Nationality string `json:"nationality"`
 }
 
-type newBookRequest struct {
+type bookRequestResponse struct {
 	Name            string       `json:"name"`
 	Author          authorInBook `json:"author"`
 	Category        string       `json:"category"`
@@ -25,32 +25,10 @@ type newBookRequest struct {
 	Publisher       string       `json:"publisher"`
 }
 
-func (bm *BookManagerServer) HandleAddBook(w http.ResponseWriter, r *http.Request) {
-	// Check Method
-	if r.Method != http.MethodPost {
-		bm.Logger.Warn("the add book api is not called by POST method")
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	//	Grab Authorization header
-	token := r.Header.Get("Authorization")
-	if token == "" {
-		w.WriteHeader(http.StatusUnauthorized)
-		bm.Logger.Warn("token empty")
-		return
-	}
-
-	//	Retrieve the related account by token
-	accountUsername, err := bm.Authenticate.GetAccountByToken(token)
-	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-		bm.Logger.WithError(err).Warn("retrieving account: ")
-		return
-	}
-
+func HandleBooksForPostMethod(w http.ResponseWriter, r *http.Request,
+	bm *BookManagerServer, authorizedUser *string) {
 	//	Retrieve user from database
-	user, err := bm.DB.GetUserByUsername(*accountUsername)
+	user, err := bm.DB.GetUserByUsername(*authorizedUser)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		bm.Logger.WithError(err).Warn("retrieving user from db: ")
@@ -65,7 +43,7 @@ func (bm *BookManagerServer) HandleAddBook(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var br newBookRequest
+	var br bookRequestResponse
 	err = json.Unmarshal(reqData, &br)
 	if err != nil {
 		bm.Logger.Warn("can not unmarshal the add book request body")
@@ -108,4 +86,88 @@ func (bm *BookManagerServer) HandleAddBook(w http.ResponseWriter, r *http.Reques
 	resBody, _ := json.Marshal(response)
 	w.WriteHeader(http.StatusAccepted)
 	w.Write(resBody)
+}
+
+func HandleBooksForGetMethod(w http.ResponseWriter, bm *BookManagerServer) {
+	//	Get all books of users
+	allBooks, err := bm.DB.GetAllBooks()
+	if err != nil {
+		bm.Logger.WithError(err).Warn("can not retrieve all books")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	// Marshal all books
+	var allBooksResponse []bookRequestResponse
+	for _, book := range allBooks {
+
+		// get items of table of contents for each book
+		contents, err := bm.DB.GetContentsByBookID(book.ID)
+		if err != nil {
+			bm.Logger.WithError(err).Warn("can not retrieve contents of book ", book.Name)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+			return
+		}
+
+		//	Get author of each book
+		author, err := bm.DB.GetAuthorByID(book.AuthorID)
+		if err != nil {
+			bm.Logger.WithError(err).Warn("can not retrieve author of book ", book.Name)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+			return
+		}
+
+		// Add books to list of all books in structure of bookRequestResponse
+		allBooksResponse = append(allBooksResponse,
+			bookRequestResponse{
+				Name: book.Name,
+				Author: authorInBook{
+					FirstName:   author.FirstName,
+					LastName:    author.LastName,
+					Nationality: author.Nationality,
+					Birthday:    author.Birthday,
+				},
+				PublishedAt:     book.PublishedAt,
+				Publisher:       book.Publisher,
+				Summary:         book.Summary,
+				Category:        book.Category,
+				Volume:          book.Volume,
+				TableOfContents: contents,
+			})
+	}
+	response := map[string]interface{}{
+		"books": allBooksResponse,
+	}
+
+	resBody, _ := json.Marshal(response)
+	w.WriteHeader(http.StatusAccepted)
+	w.Write(resBody)
+
+}
+
+func (bm *BookManagerServer) HandleBooks(w http.ResponseWriter, r *http.Request) {
+	//	Grab Authorization header
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		bm.Logger.Warn("token empty")
+		return
+	}
+
+	//	Retrieve the related account by token
+	accountUsername, err := bm.Authenticate.GetAccountByToken(token)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		bm.Logger.WithError(err).Warn("retrieving account: ")
+		return
+	}
+
+	// Check Method POST -> add new book, GET -> returns all book
+	if r.Method == http.MethodPost {
+		HandleBooksForPostMethod(w, r, bm, accountUsername)
+	} else if r.Method == http.MethodGet {
+		HandleBooksForGetMethod(w, bm)
+	}
 }

@@ -43,3 +43,30 @@ func (gdb *GormDB) CreateNewBook(newBook *Book) error {
 	}
 	return gdb.db.Create(newBook).Error
 }
+
+func (gdb *GormDB) GetAllBooks() ([]Book, error) {
+	var allBooks []Book
+	err := gdb.db.Find(&allBooks).Error
+	if err != nil {
+		return nil, err
+	}
+	return allBooks, nil
+}
+
+func (gdb *GormDB) GetContentsByBookID(bookID uint) ([]string, error) {
+	var contents []string
+	err := gdb.db.Model(&TableOfContent{}).Where("book_id = ?", bookID).Pluck("item", &contents).Error
+	if err != nil {
+		return nil, err
+	}
+	return contents, nil
+}
+
+func (gdb *GormDB) GetAuthorByID(authorID uint) (*Author, error) {
+	var author Author
+	err := gdb.db.Where("id = ?", authorID).First(&author).Error
+	if err != nil {
+		return nil, err
+	}
+	return &author, nil
+}
