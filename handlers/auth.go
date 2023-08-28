@@ -71,7 +71,7 @@ func (bm *BookManagerServer) HandleSignUp(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Parse the requeste body for the new user
+	// Parse the request body for the new user
 	reqData, err := io.ReadAll(r.Body)
 	if err != nil {
 		bm.Logger.Warn("can not read the body of the request")

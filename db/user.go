@@ -17,7 +17,7 @@ type User struct {
 }
 
 func (gdb *GormDB) CreateNewUser(u *User) error {
-	// Emcrypting the user password
+	// Encrypting the user password
 	if encryptedPW, err := bcrypt.GenerateFromPassword([]byte(u.Password), 4); err != nil {
 		return err
 	} else {
