@@ -55,6 +55,6 @@ func main() {
 	http.HandleFunc("/auth/signup", bookManagerServer.HandleSignUp)
 	http.HandleFunc("/auth/login", bookManagerServer.HandleLogin)
 	http.HandleFunc("/profile", bookManagerServer.HandleProfile)
-	http.HandleFunc("/books", bookManagerServer.HandleAddBook)
+	http.HandleFunc("/books", bookManagerServer.HandleBooks)
 	logger.WithError(http.ListenAndServe(":8080", nil)).Fatalln("can not run the http server")
 }
