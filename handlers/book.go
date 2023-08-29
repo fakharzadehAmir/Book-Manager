@@ -231,6 +231,46 @@ func HandleOneBookForGetMethod(bm *BookManagerServer, w http.ResponseWriter, r *
 	w.Write(resBody)
 }
 
+func HandleOneBookForDeleteMethod(
+	bm *BookManagerServer,
+	w http.ResponseWriter,
+	r *http.Request,
+	loginUsername *string,
+	bookID uint) {
+
+	//	Check if login user is the one who created the book with given ID
+	usernameBook, err := bm.DB.GetCreatedByUsernameByID(bookID)
+	if *usernameBook != *loginUsername {
+		bm.Logger.WithError(err).Warn("you didn't add the book with given ID in URL")
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	// Check if there is an error for finding the username of given book
+	if err != nil {
+		bm.Logger.WithError(err).Warn("can not retrieve the book with given ID ")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	if err = bm.DB.DeleteBookByID(bookID); err != nil {
+		bm.Logger.WithError(err).Warn("can not delete the book with given ID ")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	response := map[string]interface{}{
+		"message": "book has been deleted successfully",
+	}
+
+	resBody, _ := json.Marshal(response)
+	w.WriteHeader(http.StatusAccepted)
+	w.Write(resBody)
+}
+
 func (bm *BookManagerServer) HandleOneBook(w http.ResponseWriter, r *http.Request) {
 
 	//	Grab Authorization header
@@ -242,7 +282,7 @@ func (bm *BookManagerServer) HandleOneBook(w http.ResponseWriter, r *http.Reques
 	}
 
 	//	Retrieve the username of user which is login
-	_, err := bm.Authenticate.GetAccountByToken(token)
+	loginUsername, err := bm.Authenticate.GetAccountByToken(token)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 		bm.Logger.WithError(err).Warn("retrieving account: ")
@@ -264,6 +304,8 @@ func (bm *BookManagerServer) HandleOneBook(w http.ResponseWriter, r *http.Reques
 	//	PUT -> update details of the given book
 	if r.Method == http.MethodGet {
 		HandleOneBookForGetMethod(bm, w, r, uint(bookID))
+	} else if r.Method == http.MethodDelete {
+		HandleOneBookForDeleteMethod(bm, w, r, loginUsername, uint(bookID))
 	} else {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		bm.Logger.Warn("Method is not each of PUT, GET or DELETE")

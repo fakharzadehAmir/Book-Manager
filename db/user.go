@@ -41,3 +41,12 @@ func (gdb *GormDB) GetUserByUsername(username string) (*User, error) {
 	}
 	return &user, nil
 }
+
+func (gdb *GormDB) GetUsernameByID(userID uint) (*string, error) {
+	var user User
+	err := gdb.db.Where("id = ?", userID).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user.Username, nil
+}

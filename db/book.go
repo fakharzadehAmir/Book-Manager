@@ -24,15 +24,15 @@ type Book struct {
 	gorm.Model
 	Name            string `gorm:"varchar(25), unique"`
 	AuthorID        uint
-	Author          Author `gorm:"foreignKey:AuthorID"`
+	Author          Author `gorm:"foreignKey:AuthorID;constraint:OnDelete:CASCADE"`
 	CreatedByID     uint
 	CreatedBy       User   `gorm:"foreignKey:CreatedByID"`
 	Category        string `gorm:"varchar(20)"`
 	Volume          uint
 	PublishedAt     string
-	Summary         string `gorm:"varchar(100)"`
-	Publisher       string `gorm:"varchar(20)"`
-	TableOfContents []TableOfContent
+	Summary         string           `gorm:"varchar(100)"`
+	Publisher       string           `gorm:"varchar(20)"`
+	TableOfContents []TableOfContent `gorm:"constraint:OnDelete:CASCADE"` // Cascading delete for TableOfContent
 }
 
 func (gdb *GormDB) CreateNewBook(newBook *Book) error {
@@ -42,6 +42,23 @@ func (gdb *GormDB) CreateNewBook(newBook *Book) error {
 		return errors.New("this book is already added")
 	}
 	return gdb.db.Create(newBook).Error
+}
+
+func (gdb *GormDB) GetCreatedByUsernameByID(bookID uint) (*string, error) {
+	book, err := gdb.GetABookByID(bookID)
+	if err != nil {
+		return nil, err
+	}
+	username, err := gdb.GetUsernameByID(book.CreatedByID)
+	if err != nil {
+		return nil, err
+	}
+	return username, nil
+}
+
+func (gdb *GormDB) DeleteBookByID(bookID uint) error {
+	// Delete book with given ID if it doesn't exist give its error
+	return gdb.db.Delete(&Book{}, bookID).Error
 }
 
 func (gdb *GormDB) GetAllBooks() ([]Book, error) {
