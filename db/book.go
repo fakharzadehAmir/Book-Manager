@@ -53,6 +53,15 @@ func (gdb *GormDB) GetAllBooks() ([]Book, error) {
 	return allBooks, nil
 }
 
+func (gdb *GormDB) GetABookByID(bookId uint) (*Book, error) {
+	var book Book
+	err := gdb.db.Where("id = ?", bookId).First(&book).Error
+	if err != nil {
+		return nil, err
+	}
+	return &book, nil
+}
+
 func (gdb *GormDB) GetContentsByBookID(bookID uint) ([]string, error) {
 	var contents []string
 	err := gdb.db.Model(&TableOfContent{}).Where("book_id = ?", bookID).Pluck("item", &contents).Error

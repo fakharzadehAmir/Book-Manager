@@ -3,8 +3,10 @@ package handlers
 import (
 	"bookman/db"
 	"encoding/json"
+	"github.com/gorilla/mux"
 	"io"
 	"net/http"
+	"strconv"
 )
 
 type authorInBook struct {
@@ -169,5 +171,107 @@ func (bm *BookManagerServer) HandleBooks(w http.ResponseWriter, r *http.Request)
 		HandleBooksForPostMethod(w, r, bm, accountUsername)
 	} else if r.Method == http.MethodGet {
 		HandleBooksForGetMethod(w, bm)
+	} else {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		bm.Logger.Warn("Method is neither POST nor GET")
+		return
 	}
+}
+
+func HandleOneBookForGetMethod(bm *BookManagerServer, w http.ResponseWriter, r *http.Request, bookID uint) {
+	book, err := bm.DB.GetABookByID(bookID)
+	if err != nil {
+		bm.Logger.WithError(err).Warn("can not retrieve book ", bookID)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	// get items of table of contents for each book
+	contents, err := bm.DB.GetContentsByBookID(book.ID)
+	if err != nil {
+		bm.Logger.WithError(err).Warn("can not retrieve contents of book ", book.Name)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	//	Get author of book
+	author, err := bm.DB.GetAuthorByID(book.AuthorID)
+	if err != nil {
+		bm.Logger.WithError(err).Warn("can not retrieve author of book ", book.Name)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	bookResponse := bookRequestResponse{
+		Name: book.Name,
+		Author: authorInBook{
+			FirstName:   author.FirstName,
+			LastName:    author.LastName,
+			Birthday:    author.Birthday,
+			Nationality: author.Nationality,
+		},
+		Volume:          book.Volume,
+		Category:        book.Category,
+		Summary:         book.Summary,
+		Publisher:       book.Publisher,
+		PublishedAt:     book.PublishedAt,
+		TableOfContents: contents,
+	}
+
+	resBody, err := json.Marshal(bookResponse)
+	if err != nil {
+		bm.Logger.WithError(err).Warn("can not marshal retrieved book to json", book.Name)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+	w.Write(resBody)
+}
+
+func (bm *BookManagerServer) HandleOneBook(w http.ResponseWriter, r *http.Request) {
+
+	//	Grab Authorization header
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		w.WriteHeader(http.StatusUnauthorized)
+		bm.Logger.Warn("token empty")
+		return
+	}
+
+	//	Retrieve the username of user which is login
+	_, err := bm.Authenticate.GetAccountByToken(token)
+	if err != nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		bm.Logger.WithError(err).Warn("retrieving account: ")
+		return
+	}
+
+	//	Check value of given id
+	pathID := mux.Vars(r)["id"]
+	bookID, err := strconv.ParseUint(pathID, 10, 64)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		bm.Logger.WithError(err).Warn("can not convert id to uint ")
+		return
+	}
+
+	//	Check Method
+	//	DELETE -> delete the given book,
+	//	GET -> details of the given book
+	//	PUT -> update details of the given book
+	if r.Method == http.MethodGet {
+		HandleOneBookForGetMethod(bm, w, r, uint(bookID))
+	} else {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		bm.Logger.Warn("Method is not each of PUT, GET or DELETE")
+		return
+	}
+	//else if r.Method == http.MethodPatch {
+	//
+	//} else if r.Method == http.MethodDelete {
+	//
+	//}
 }
