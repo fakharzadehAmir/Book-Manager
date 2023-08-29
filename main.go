@@ -5,6 +5,7 @@ import (
 	"bookman/config"
 	"bookman/db"
 	"bookman/handlers"
+	"github.com/gorilla/mux"
 	"net/http"
 	"time"
 
@@ -51,10 +52,12 @@ func main() {
 		Logger:       logger,
 		Authenticate: auth,
 	}
-
-	http.HandleFunc("/auth/signup", bookManagerServer.HandleSignUp)
-	http.HandleFunc("/auth/login", bookManagerServer.HandleLogin)
-	http.HandleFunc("/profile", bookManagerServer.HandleProfile)
-	http.HandleFunc("/books", bookManagerServer.HandleBooks)
+	router := mux.NewRouter()
+	router.HandleFunc("/auth/signup", bookManagerServer.HandleSignUp)
+	router.HandleFunc("/auth/login", bookManagerServer.HandleLogin)
+	router.HandleFunc("/profile", bookManagerServer.HandleProfile)
+	router.HandleFunc("/books", bookManagerServer.HandleBooks)
+	router.HandleFunc("/books/{id:[1-9][0-9]*}", bookManagerServer.HandleOneBook)
+	http.Handle("/", router)
 	logger.WithError(http.ListenAndServe(":8080", nil)).Fatalln("can not run the http server")
 }
