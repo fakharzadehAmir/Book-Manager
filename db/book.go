@@ -61,6 +61,68 @@ func (gdb *GormDB) DeleteBookByID(bookID uint) error {
 	return gdb.db.Delete(&Book{}, bookID).Error
 }
 
+func (gdb *GormDB) UpdateBookByID(book *Book, bookID uint) (*Book, error) {
+	//	find the book with bookID in postgres database
+	var existingBook Book
+	err := gdb.db.First(&existingBook, bookID).Error
+	if err != nil {
+		return nil, err
+	}
+
+	//	update given data in our request body
+	if book.Name != "" {
+		existingBook.Name = book.Name
+	}
+	if book.Volume != 0 {
+		existingBook.Volume = book.Volume
+	}
+	if book.PublishedAt != "" {
+		existingBook.PublishedAt = book.PublishedAt
+	}
+	if book.Publisher != "" {
+		existingBook.Publisher = book.Publisher
+	}
+	if book.Summary != "" {
+		existingBook.Summary = book.Summary
+	}
+	if book.Category != "" {
+		existingBook.Category = book.Category
+	}
+	if book.TableOfContents != nil {
+		err = gdb.db.Where("book_id = ?", bookID).Delete(&TableOfContent{}).Error
+		if err != nil {
+			return nil, err
+		}
+		existingBook.TableOfContents = book.TableOfContents
+	}
+	checkAuthor := Author{
+		FirstName:   "",
+		LastName:    "",
+		Nationality: "",
+		Birthday:    "",
+	}
+	if book.Author != checkAuthor {
+		existedAuthor, err := gdb.GetAuthorByID(existingBook.AuthorID)
+		if err != nil {
+			return nil, err
+		}
+		// Update the author fields from the request body
+		existedAuthor.FirstName = book.Author.FirstName
+		existedAuthor.LastName = book.Author.LastName
+		existedAuthor.Birthday = book.Author.Birthday
+		existedAuthor.Nationality = book.Author.Nationality
+		gdb.db.Save(existedAuthor)
+	}
+
+	//	save changed data
+	err = gdb.db.Save(existingBook).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &existingBook, nil
+}
+
 func (gdb *GormDB) GetAllBooks() ([]Book, error) {
 	var allBooks []Book
 	err := gdb.db.Find(&allBooks).Error
